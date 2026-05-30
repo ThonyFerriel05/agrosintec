@@ -1,0 +1,134 @@
+/* App.fase2.css
+   Estilos NUEVOS para el flujo de 2 pasos (stepper) y el diagnostico de hoja.
+   Se apoya en las clases existentes (glass, badge, card) de App.css. */
+
+/* ===================== STEPPER ===================== */
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  max-width: 1100px;
+  margin: 1.25rem auto 0;
+  padding: 0.75rem 1rem;
+  border-radius: 16px;
+  flex-wrap: wrap;
+}
+
+.step-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+  text-align: left;
+}
+.step-tab:hover:not(:disabled) { transform: translateY(-2px); border-color: rgba(110, 231, 183, 0.5); }
+.step-tab.active {
+  border-color: rgba(110, 231, 183, 0.8);
+  background: rgba(16, 185, 129, 0.12);
+  box-shadow: 0 0 22px rgba(16, 185, 129, 0.25);
+}
+.step-tab.done .step-num { background: rgba(16, 185, 129, 0.85); }
+.step-tab.locked,
+.step-tab:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.step-num {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-weight: 700;
+  font-size: 1rem;
+}
+.step-info { display: flex; flex-direction: column; line-height: 1.2; }
+.step-info strong { font-size: 0.98rem; }
+.step-info small { opacity: 0.7; font-size: 0.78rem; }
+.step-arrow { font-size: 1.5rem; opacity: 0.6; }
+
+/* ============ CONTEXTO DEL CRUCE (panel hoja) ============ */
+.cruce-context {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.status-badge {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  width: fit-content;
+}
+.status-badge.ok { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+.status-badge.warning { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
+
+.next-step-btn { margin-top: 0.75rem; }
+
+/* ===================== DIAGNOSTICO DE HOJA ===================== */
+.diag-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+.badge-lg { font-size: 0.95rem; padding: 0.45rem 0.9rem; }
+
+.confianza-wrap { display: flex; align-items: center; gap: 0.6rem; min-width: 240px; }
+.confianza-label { font-size: 0.8rem; opacity: 0.75; }
+.confianza-track {
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  min-width: 120px;
+}
+.confianza-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #34d399, #10b981);
+  transition: width 0.5s ease;
+}
+.confianza-num { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.diag-card { display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; }
+.diag-block {
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.diag-block h4 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.diag-block p { margin: 0; opacity: 0.92; line-height: 1.5; }
+.diag-block .muted { opacity: 0.6; font-style: italic; }
+
+.signos-list { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.signos-list li { line-height: 1.45; }
+
+/* El cruce con el suelo: el bloque mas destacado */
+.cruce-block {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 22px rgba(16, 185, 129, 0.15);
+}
+.cruce-block h4 { color: #6ee7b7; }
+
+@media (max-width: 640px) {
+  .step-arrow { display: none; }
+  .stepper { gap: 0.6rem; }
+  .diag-headline { flex-direction: column; align-items: stretch; }
+}

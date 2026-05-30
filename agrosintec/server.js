@@ -11,8 +11,29 @@ import { guardarSuelo, leerSuelo } from "./db.js";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS habilitado para el frontend Vite.
-app.use(cors({ origin: "http://localhost:5173" }));
+// CORS para el frontend Vite.
+// Origenes permitidos: se pueden definir en .env como CORS_ORIGIN (separados por coma).
+// Por defecto, los puertos tipicos de Vite en local (5173 y 5174, por si salta de puerto).
+const ORIGENES_PERMITIDOS = (process.env.CORS_ORIGIN ||
+  "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Permite herramientas sin origin (curl, Postman) y los origenes de la lista.
+      if (!origin || ORIGENES_PERMITIDOS.includes(origin)) {
+        return callback(null, true);
+      }
+      // Origen no permitido: no mandamos el header allow-origin (el navegador lo
+      // bloquea) sin lanzar error, para no ensuciar la consola del backend.
+      console.warn(`[cors] Origen bloqueado: ${origin}`);
+      return callback(null, false);
+    },
+  })
+);
 
 // Las imagenes en base64 son grandes -> subimos el limite del body.
 app.use(express.json({ limit: "20mb" }));
