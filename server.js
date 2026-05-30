@@ -5,7 +5,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
-import { extraerAnalisisSuelo } from "./gemini.js";
+import { extraerAnalisisSuelo, analizarHoja } from "./gemini.js";
 import { guardarSuelo, leerSuelo } from "./db.js";
 
 const app = express();
@@ -56,6 +56,37 @@ app.post("/analizar-suelo", async (req, res) => {
   return res.json(analisis);
 });
 
+// POST /analizar-hoja  { agricultor_id, imagen_base64 }
+// FASE 2: el CRUCE. La hoja DEPENDE del perfil de suelo guardado.
+app.post("/analizar-hoja", async (req, res) => {
+  const { agricultor_id, imagen_base64 } = req.body || {};
+
+  if (!agricultor_id) {
+    return res.status(400).json({ error: "Falta agricultor_id." });
+  }
+  if (!imagen_base64) {
+    return res.status(400).json({ error: "Falta imagen_base64." });
+  }
+
+  // 1) Se lee PRIMERO el perfil de suelo guardado (reusa la logica de la Fase 1).
+  const perfilSuelo = await leerSuelo(agricultor_id);
+
+  // Si no hay suelo, no se puede cruzar: la hoja depende del suelo.
+  if (!perfilSuelo) {
+    return res.status(409).json({
+      error: `No hay analisis de suelo guardado para "${agricultor_id}". Analiza el suelo primero con POST /analizar-suelo: el diagnostico de hoja depende del perfil de suelo.`,
+    });
+  }
+
+  const { base64, mimeType } = parsearImagen(imagen_base64);
+
+  // 2) analizarHoja calcula factores limitantes del suelo y los inyecta en el prompt.
+  //    Ya trae try/catch + fallback, asi que siempre resuelve con estructura valida.
+  const resultado = await analizarHoja(base64, mimeType, perfilSuelo);
+
+  return res.json(resultado);
+});
+
 // GET /suelo/:agricultor_id  -> leer lo guardado
 app.get("/suelo/:agricultor_id", async (req, res) => {
   const { agricultor_id } = req.params;
@@ -68,5 +99,5 @@ app.get("/suelo/:agricultor_id", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[server] Backend Fase 1 escuchando en http://localhost:${PORT}`);
+  console.log(`[server] Backend Fase 1+2 escuchando en http://localhost:${PORT}`);
 });

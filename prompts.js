@@ -84,3 +84,60 @@ sin markdown). El campo "agricultor_id" dejalo como string vacio "", el servidor
   }
 }
 `.trim();
+
+// =====================================================================
+// FASE 2 - Analisis de HOJA con CRUCE contra el perfil de suelo.
+// =====================================================================
+
+/**
+ * Construye el prompt de analisis de hoja inyectando el perfil de suelo.
+ * @param {object} perfilSuelo - el JSON de suelo guardado (no se usa entero aqui,
+ *   pero se deja por si quieres mostrar mas contexto numerico).
+ * @param {string[]} factoresLimitantes - lineas legibles YA calculadas en gemini.js
+ *   (deterministas, no las decide Gemini).
+ * @returns {string} prompt listo para Gemini.
+ */
+export function construirPromptHoja(perfilSuelo, factoresLimitantes) {
+  const listaFactores = factoresLimitantes.length
+    ? factoresLimitantes.map((f) => `- ${f}`).join("\n")
+    : "- (No se detectaron factores limitantes claros en el suelo de este agricultor.)";
+
+  return `
+Eres un agronomo experto en diagnostico foliar (analisis de hojas) por imagen.
+Te paso la FOTO de una hoja de cultivo. Tu trabajo es detectar SIGNOS TEMPRANOS
+de deficiencias o estres. NO predices el futuro ni das certezas absolutas:
+hablas SIEMPRE en terminos de riesgo y probabilidad, con un nivel de confianza.
+
+=====================================================================
+>>> INYECCION DEL PERFIL DE SUELO (EL CRUCE - lo mas importante) <<<
+Este agricultor YA tiene un analisis de suelo. De ese suelo extrajimos los
+FACTORES LIMITANTES reales (los que debilitan la planta). Usalos como
+CONTEXTO PRIORITARIO al leer la hoja:
+  - Si lo que ves en la hoja es COMPATIBLE con uno de estos factores del
+    suelo, dale MAS PESO a esa hipotesis en vez de adivinar al azar.
+  - Si la hoja NO concuerda con ningun factor del suelo, dilo claramente.
+
+FACTORES LIMITANTES DEL SUELO DE ESTE AGRICULTOR:
+${listaFactores}
+=====================================================================
+
+Analiza la hoja ponderando ese contexto y devuelve UNICAMENTE este JSON
+(sin markdown, sin texto extra, exactamente estas claves):
+
+{
+  "signos_detectados": ["signos visuales concretos que ves en la hoja"],
+  "diagnostico_probable": "hipotesis mas probable, en lenguaje de riesgo/probabilidad (no certezas)",
+  "nivel_riesgo": "bajo | medio | alto",
+  "confianza": 0.0,
+  "accion_recomendada": "que hacer, concreto y accionable",
+  "razonamiento_suelo": "OBLIGATORIO: explica como usaste el perfil de suelo para llegar al diagnostico, que factor limitante reforzo o descarto que hipotesis"
+}
+
+Reglas de salida:
+- "confianza" es un numero entre 0 y 1.
+- "nivel_riesgo" solo puede ser exactamente "bajo", "medio" o "alto".
+- "razonamiento_suelo" SIEMPRE debe mencionar el cruce con el suelo.
+- No inventes signos que no se vean. Si la hoja luce sana, dilo con confianza
+  alta y riesgo "bajo", y aun asi menciona el cruce con el suelo.
+`.trim();
+}
