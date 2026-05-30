@@ -80,7 +80,7 @@ app.post("/analizar-suelo", async (req, res) => {
 // POST /analizar-hoja  { agricultor_id, imagen_base64 }
 // FASE 2: el CRUCE. La hoja DEPENDE del perfil de suelo guardado.
 app.post("/analizar-hoja", async (req, res) => {
-  const { agricultor_id, imagen_base64 } = req.body || {};
+  const { agricultor_id, imagen_base64, cultivo, clima } = req.body || {};
 
   if (!agricultor_id) {
     return res.status(400).json({ error: "Falta agricultor_id." });
@@ -101,9 +101,10 @@ app.post("/analizar-hoja", async (req, res) => {
 
   const { base64, mimeType } = parsearImagen(imagen_base64);
 
-  // 2) analizarHoja calcula factores limitantes del suelo y los inyecta en el prompt.
-  //    Ya trae try/catch + fallback, asi que siempre resuelve con estructura valida.
-  const resultado = await analizarHoja(base64, mimeType, perfilSuelo);
+  // 2) analizarHoja calcula factores limitantes + prior de amenazas (cultivo/clima)
+  //    y los inyecta en el prompt. Ya trae try/catch + fallback, asi que siempre
+  //    resuelve con estructura valida.
+  const resultado = await analizarHoja(base64, mimeType, perfilSuelo, cultivo, clima);
 
   return res.json(resultado);
 });

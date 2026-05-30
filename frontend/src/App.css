@@ -371,6 +371,11 @@ input[type="text"]:focus {
   min-height: 160px;
 }
 
+/* Input de archivo oculto: se dispara con su <label htmlFor>, no se muestra. */
+.hidden-file-input {
+  display: none;
+}
+
 .dropzone.active, .dropzone:hover {
   border-color: var(--primary);
   background: rgba(16, 185, 129, 0.05);

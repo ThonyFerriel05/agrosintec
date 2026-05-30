@@ -5,17 +5,10 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { PROMPT_EXTRACCION_SUELO, construirPromptHoja } from "./prompts.js";
+import { ESQUEMA_SUELO, ESQUEMA_HOJA, CLAVES_PARAMETROS } from "./schema.js";
+import { calcularAmenazas } from "./riesgoFitosanitario.js";
 
 const MODELO = "gemini-2.5-flash";
-
-// Claves de parametros que SIEMPRE deben existir en la salida.
-const CLAVES_PARAMETROS = [
-  "ph", "materia_organica", "conductividad_electrica",
-  "nitrogeno", "fosforo", "potasio", "calcio", "magnesio", "sodio", "azufre", "silicio",
-  "aluminio", "h_mas_al", "tbi", "cic", "t",
-  "sb", "al_pct", "ca_pct", "mg_pct", "k_pct", "na_pct",
-  "hierro", "manganeso", "zinc", "cobre", "boro",
-];
 
 // Estructura valida de fallback, para que el demo no se rompa si Gemini falla.
 function estructuraFallback(agricultor_id) {
@@ -31,6 +24,17 @@ function estructuraFallback(agricultor_id) {
       limo_pct: "sin dato",
       arcilla_pct: "sin dato",
       clase_textural: "sin dato",
+    },
+    interpretacion: {
+      tipo_suelo: "sin dato",
+      resumen: "No se pudo interpretar el suelo en este momento. Reintenta el analisis.",
+      lo_bueno: [],
+      lo_que_falta: [],
+      cultivos: {
+        mas_adecuados: [],
+        con_manejo: "sin dato",
+        fertilizante_sugerido: "sin dato",
+      },
     },
     _error: "No se pudo extraer con Gemini, se devolvio estructura vacia.",
   };
@@ -60,8 +64,10 @@ export async function extraerAnalisisSuelo(imagenBase64, mimeType, agricultor_id
         },
       ],
       config: {
-        // Salida JSON forzada por el SDK. Nada de limpiar markdown con regex.
+        // Salida JSON ESTRUCTURADA: el esquema obliga la forma exacta.
+        // Nada de limpiar markdown ni rogar la estructura en el prompt.
         responseMimeType: "application/json",
+        responseSchema: ESQUEMA_SUELO,
       },
     });
 
@@ -164,13 +170,17 @@ function fallbackHoja(factoresLimitantes) {
  * @param {string} imagenBase64 - imagen de la hoja en base64 (sin prefijo data:)
  * @param {string} mimeType - ej "image/jpeg"
  * @param {object} perfilSuelo - perfil de suelo ya leido de db.json
+ * @param {string} cultivo - ej "arroz", "soya"... (default "general")
+ * @param {string} clima - clave de clima/temporada (default "templado")
  * @returns {Promise<object>} diagnostico con la forma de la Fase 2
  */
-export async function analizarHoja(imagenBase64, mimeType, perfilSuelo) {
+export async function analizarHoja(imagenBase64, mimeType, perfilSuelo, cultivo = "general", clima = "templado") {
   // 1) Se calculan los factores limitantes a partir del suelo guardado.
   const factoresLimitantes = identificarFactoresLimitantes(perfilSuelo);
-  // 2) Se inyectan como contexto en el prompt de la hoja (EL CRUCE).
-  const prompt = construirPromptHoja(perfilSuelo, factoresLimitantes);
+  // 2) PASO INTERMEDIO: prior fitosanitario (amenazas probables) desde suelo + cultivo + clima.
+  const contexto = calcularAmenazas(perfilSuelo, cultivo, clima);
+  // 3) Se inyecta el cruce de suelo + el prior de amenazas en el prompt de la hoja.
+  const prompt = construirPromptHoja(perfilSuelo, factoresLimitantes, contexto);
 
   try {
     const respuesta = await ai.models.generateContent({
@@ -186,6 +196,7 @@ export async function analizarHoja(imagenBase64, mimeType, perfilSuelo) {
       ],
       config: {
         responseMimeType: "application/json",
+        responseSchema: ESQUEMA_HOJA,
       },
     });
 

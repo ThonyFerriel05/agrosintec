@@ -42,47 +42,28 @@ Ademas, la TEXTURA del suelo en un bloque aparte:
   arena_pct, limo_pct, arcilla_pct (numeros en %), clase_textural (texto, ej "Franco Arcilloso").
   Si no aparecen, usa "sin dato".
 
-Devuelve UNICAMENTE un JSON valido con EXACTAMENTE esta forma (sin texto extra,
-sin markdown). El campo "agricultor_id" dejalo como string vacio "", el servidor lo rellena:
+Y POR ULTIMO, lo mas importante para el agricultor: una "interpretacion" en
+LENGUAJE HUMANO Y SENCILLO (como le hablarias a un agricultor que NO sabe quimica).
+Se PUNTUAL y CONCISO. NO repitas la misma idea en varios campos: cada campo aporta
+algo DISTINTO. Nada de jerga ni numeros tecnicos sueltos. Usa estos campos:
+  - "tipo_suelo": UNA frase corta que describa el suelo (ej "Suelo acido y franco arcilloso").
+    NO enumeres aqui las deficiencias, eso va en otra parte.
+  - "resumen": MAXIMO 1 frase, directa y sin rodeos, con lo mas urgente a corregir.
+  - "lo_bueno": lista de 2-4 ETIQUETAS MUY CORTAS (3-5 palabras c/u), SIN explicacion ni frases
+    (ej "Buena retencion de nutrientes", "Calcio y magnesio altos").
+  - "lo_que_falta": lista de 2-4 problemas, cada uno UNA frase corta y puntual que diga
+    QUE falta y por que importa (ej "Fosforo muy bajo: frena raices y floracion").
+  - "cultivos": un objeto que recomiende cultivos segun ESTE suelo concreto:
+      - "mas_adecuados": lista de 2-4 cultivos que crecerian BIEN en el suelo TAL COMO ESTA hoy.
+      - "con_manejo": UNA frase que diga que otros cultivos (ej arroz, soya, maiz) podrian
+        servir SI se corrige el suelo, indicando la correccion concreta que hace falta.
+      - "fertilizante_sugerido": UNA frase con el fertilizante o enmienda concreta recomendada
+        (ej "Encalado para subir el pH + fertilizante rico en fosforo y potasio").
+Basate en los numeros que extrajiste, pero NO los repitas crudos: traducelos a consecuencias.
 
-{
-  "agricultor_id": "",
-  "parametros": {
-    "ph": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "materia_organica": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "conductividad_electrica": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "nitrogeno": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "fosforo": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "potasio": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "calcio": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "magnesio": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "sodio": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "azufre": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "silicio": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "aluminio": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "h_mas_al": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "tbi": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "cic": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "t": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "sb": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "al_pct": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "ca_pct": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "mg_pct": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "k_pct": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "na_pct": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "hierro": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "manganeso": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "zinc": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "cobre": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" },
-    "boro": { "valor": "sin dato", "unidad": "sin dato", "clasificacion": "sin dato" }
-  },
-  "textura": {
-    "arena_pct": "sin dato",
-    "limo_pct": "sin dato",
-    "arcilla_pct": "sin dato",
-    "clase_textural": "sin dato"
-  }
-}
+La ESTRUCTURA de salida (que claves y de que tipo) ya esta fijada por el sistema:
+tu solo rellena su contenido. No agregues texto fuera del JSON ni uses markdown.
+Si un parametro no aparece en el reporte, pon "sin dato" en sus tres campos.
 `.trim();
 
 // =====================================================================
@@ -90,23 +71,35 @@ sin markdown). El campo "agricultor_id" dejalo como string vacio "", el servidor
 // =====================================================================
 
 /**
- * Construye el prompt de analisis de hoja inyectando el perfil de suelo.
- * @param {object} perfilSuelo - el JSON de suelo guardado (no se usa entero aqui,
- *   pero se deja por si quieres mostrar mas contexto numerico).
+ * Construye el prompt de analisis de hoja inyectando el perfil de suelo
+ * y el PRIOR fitosanitario (amenazas probables ya calculadas por el codigo).
+ * @param {object} perfilSuelo - el JSON de suelo guardado.
  * @param {string[]} factoresLimitantes - lineas legibles YA calculadas en gemini.js
  *   (deterministas, no las decide Gemini).
+ * @param {object} contexto - { cultivo, climaLabel, amenazas } del modulo
+ *   riesgoFitosanitario.js. `amenazas` es la lista corta de candidatos plausibles.
  * @returns {string} prompt listo para Gemini.
  */
-export function construirPromptHoja(perfilSuelo, factoresLimitantes) {
+export function construirPromptHoja(perfilSuelo, factoresLimitantes, contexto = {}) {
+  const { cultivo = "general", climaLabel = "templado", amenazas = [] } = contexto;
+
   const listaFactores = factoresLimitantes.length
     ? factoresLimitantes.map((f) => `- ${f}`).join("\n")
     : "- (No se detectaron factores limitantes claros en el suelo de este agricultor.)";
+
+  const listaAmenazas = amenazas.length
+    ? amenazas
+        .map((a) => `- ${a.nombre} (${a.tipo}, probabilidad ~${Math.round(a.probabilidad * 100)}%): ${a.razones.join("; ")}.`)
+        .join("\n")
+    : "- (No se identificaron amenazas claras para este cultivo/clima; evalua la hoja con cautela y sin forzar un diagnostico.)";
 
   return `
 Eres un agronomo experto en diagnostico foliar (analisis de hojas) por imagen.
 Te paso la FOTO de una hoja de cultivo. Tu trabajo es detectar SIGNOS TEMPRANOS
 de deficiencias o estres. NO predices el futuro ni das certezas absolutas:
 hablas SIEMPRE en terminos de riesgo y probabilidad, con un nivel de confianza.
+
+Cultivo: ${cultivo}. Clima de la temporada: ${climaLabel}.
 
 =====================================================================
 >>> INYECCION DEL PERFIL DE SUELO (EL CRUCE - lo mas importante) <<<
@@ -119,24 +112,35 @@ CONTEXTO PRIORITARIO al leer la hoja:
 
 FACTORES LIMITANTES DEL SUELO DE ESTE AGRICULTOR:
 ${listaFactores}
+
+=====================================================================
+>>> AMENAZAS PROBABLES (PRIOR calculado por el sistema) <<<
+A partir del suelo, el cultivo (${cultivo}) y el clima (${climaLabel}), el sistema
+ya calculo que plagas/hongos/bacterias son MAS PLAUSIBLES en este caso. Esta lista
+es tu PRIMER lugar donde buscar, para NO inventar enfermedades exoticas:
+  - Si lo que ves coincide con una de estas amenazas, NOMBRALA y sube la confianza.
+  - Si ves algo que NO esta en la lista pero es claro en la imagen, puedes
+    reportarlo, pero di explicitamente que estaba fuera del prior.
+  - Si la hoja luce sana, dilo; no fuerces ninguna de estas amenazas.
+
+CANDIDATOS PROBABLES PARA ESTE CULTIVO/CLIMA/SUELO:
+${listaAmenazas}
 =====================================================================
 
-Analiza la hoja ponderando ese contexto y devuelve UNICAMENTE este JSON
-(sin markdown, sin texto extra, exactamente estas claves):
+Analiza la hoja ponderando ese contexto. La ESTRUCTURA de salida ya esta fijada
+por el sistema (claves y tipos); tu rellena el contenido de cada campo:
+  - "signos_detectados": signos visuales concretos que ves en la hoja.
+  - "diagnostico_probable": la hipotesis mas probable, en lenguaje de riesgo/probabilidad (no certezas).
+  - "nivel_riesgo": exactamente "bajo", "medio" o "alto".
+  - "confianza": numero entre 0 y 1.
+  - "accion_recomendada": que hacer, concreto y accionable.
+  - "razonamiento_suelo": OBLIGATORIO, explica como usaste el perfil de suelo Y la
+    lista de amenazas probables para llegar al diagnostico: que factor o amenaza
+    reforzo o descarto que hipotesis.
 
-{
-  "signos_detectados": ["signos visuales concretos que ves en la hoja"],
-  "diagnostico_probable": "hipotesis mas probable, en lenguaje de riesgo/probabilidad (no certezas)",
-  "nivel_riesgo": "bajo | medio | alto",
-  "confianza": 0.0,
-  "accion_recomendada": "que hacer, concreto y accionable",
-  "razonamiento_suelo": "OBLIGATORIO: explica como usaste el perfil de suelo para llegar al diagnostico, que factor limitante reforzo o descarto que hipotesis"
-}
-
-Reglas de salida:
-- "confianza" es un numero entre 0 y 1.
-- "nivel_riesgo" solo puede ser exactamente "bajo", "medio" o "alto".
-- "razonamiento_suelo" SIEMPRE debe mencionar el cruce con el suelo.
+Reglas:
+- "razonamiento_suelo" SIEMPRE debe mencionar el cruce con el suelo y, si aplica,
+  con la lista de amenazas probables.
 - No inventes signos que no se vean. Si la hoja luce sana, dilo con confianza
   alta y riesgo "bajo", y aun asi menciona el cruce con el suelo.
 `.trim();

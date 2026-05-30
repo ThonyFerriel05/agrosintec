@@ -44,6 +44,28 @@ const AGRICULTORES_DEMO = [
   { id: 'DEMO-SUELO-ACIDO', label: 'Zona Andina (Suelo Ácido)' }
 ];
 
+// Cultivos soportados por el prior fitosanitario (deben coincidir con riesgoFitosanitario.js).
+const CULTIVOS = [
+  { id: 'general', label: 'General / Otro' },
+  { id: 'arroz', label: 'Arroz' },
+  { id: 'soya', label: 'Soya' },
+  { id: 'maiz', label: 'Maíz' },
+  { id: 'papa', label: 'Papa' },
+  { id: 'tomate', label: 'Tomate' },
+  { id: 'cafe', label: 'Café' },
+  { id: 'frijol', label: 'Frijol' },
+  { id: 'platano', label: 'Plátano / Banano' }
+];
+
+// Clima / temporada (deben coincidir con las claves de CLIMAS en riesgoFitosanitario.js).
+const CLIMAS = [
+  { id: 'templado', label: 'Templado' },
+  { id: 'frio_humedo', label: 'Frío y húmedo' },
+  { id: 'frio_seco', label: 'Frío y seco' },
+  { id: 'calido_humedo', label: 'Caluroso y húmedo' },
+  { id: 'calido_seco', label: 'Caluroso y seco' }
+];
+
 // Lee un File y devuelve su contenido como Data URL (base64) por callback.
 function leerArchivoComoDataURL(file, onResult, onError) {
   if (!file) return;
@@ -69,6 +91,7 @@ function App() {
   const [error, setError] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [tabActivo, setTabActivo] = useState('resumen');
+  const [detalleTecnicoAbierto, setDetalleTecnicoAbierto] = useState(false); // tabs técnicos plegados por defecto
 
   // ---- Estado PASO 2: HOJA ----
   const [imagenHoja, setImagenHoja] = useState('');
@@ -77,6 +100,8 @@ function App() {
   const [diagnostico, setDiagnostico] = useState(null);
   const [errorHoja, setErrorHoja] = useState('');
   const [dragActiveHoja, setDragActiveHoja] = useState(false);
+  const [cultivoHoja, setCultivoHoja] = useState('general'); // contexto para el prior de amenazas
+  const [climaHoja, setClimaHoja] = useState('templado');
 
   // El Paso 2 SOLO se habilita cuando hay un perfil de suelo cargado para el agricultor.
   const perfilSueloListo = !!(resultado && resultado.parametros);
@@ -174,7 +199,7 @@ function App() {
       const response = await fetch(`${API_URL}/analizar-hoja`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agricultor_id: agricultorId.trim(), imagen_base64: imagenHoja })
+        body: JSON.stringify({ agricultor_id: agricultorId.trim(), imagen_base64: imagenHoja, cultivo: cultivoHoja, clima: climaHoja })
       });
       if (!response.ok) {
         const errorText = await response.text();
@@ -341,7 +366,7 @@ function App() {
                 <div className="preview-container">
                   <img src={imagenPreview} alt="Reporte cargado" className="image-preview" />
                   <div className="preview-overlay glass">
-                    <label htmlFor="file-upload-replace" className="btn btn-sm btn-overlay">Cambiar Imagen</label>
+                    <label htmlFor="file-upload" className="btn btn-sm btn-overlay">Cambiar Imagen</label>
                   </div>
                 </div>
               ) : (
@@ -352,7 +377,6 @@ function App() {
                 </div>
               )}
               <input id="file-upload" type="file" className="hidden-file-input" accept="image/*" onChange={handleFileChange} />
-              <input id="file-upload-replace" type="file" className="hidden-file-input" accept="image/*" onChange={handleFileChange} />
             </div>
           </div>
 
@@ -390,13 +414,69 @@ function App() {
                     <span className="status-badge warning">⚠️ Con errores de extracción (Fallback activo)</span>
                   )}
                 </div>
+              </div>
+
+              {/* NUEVO: interpretación en lenguaje humano (lo primero que ve el agricultor) */}
+              {resultado.interpretacion && (
+                <div className="card glass interpretacion-card border-glow animate-fade-in">
+                  <div className="interp-head">
+                    <span className="interp-icon">🌱</span>
+                    <div>
+                      <h3>Tu suelo, en pocas palabras</h3>
+                      <p className="interp-tipo">{resultado.interpretacion.tipo_suelo}</p>
+                    </div>
+                  </div>
+                  <p className="interp-resumen">{resultado.interpretacion.resumen}</p>
+                  <div className="interp-cols">
+                    <div className="interp-col bueno">
+                      <h4>✅ Lo bueno</h4>
+                      {Array.isArray(resultado.interpretacion.lo_bueno) && resultado.interpretacion.lo_bueno.length > 0 ? (
+                        <ul>{resultado.interpretacion.lo_bueno.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                      ) : <p className="muted">—</p>}
+                    </div>
+                    <div className="interp-col falta">
+                      <h4>⚠️ Lo que falta</h4>
+                      {Array.isArray(resultado.interpretacion.lo_que_falta) && resultado.interpretacion.lo_que_falta.length > 0 ? (
+                        <ul>{resultado.interpretacion.lo_que_falta.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                      ) : <p className="muted">—</p>}
+                    </div>
+                  </div>
+                  {resultado.interpretacion.cultivos && (
+                    <div className="interp-cultivos glow-primary">
+                      <h4>🌾 Cultivos recomendados para este suelo</h4>
+                      {Array.isArray(resultado.interpretacion.cultivos.mas_adecuados) && resultado.interpretacion.cultivos.mas_adecuados.length > 0 && (
+                        <div className="cultivos-chips">
+                          {resultado.interpretacion.cultivos.mas_adecuados.map((c, i) => (
+                            <span key={i} className="cultivo-chip">🌱 {c}</span>
+                          ))}
+                        </div>
+                      )}
+                      {resultado.interpretacion.cultivos.con_manejo && resultado.interpretacion.cultivos.con_manejo !== 'sin dato' && (
+                        <p className="cultivo-linea"><strong>🔧 Con manejo:</strong> {resultado.interpretacion.cultivos.con_manejo}</p>
+                      )}
+                      {resultado.interpretacion.cultivos.fertilizante_sugerido && resultado.interpretacion.cultivos.fertilizante_sugerido !== 'sin dato' && (
+                        <p className="cultivo-linea"><strong>🧪 Fertilizante sugerido:</strong> {resultado.interpretacion.cultivos.fertilizante_sugerido}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Detalle técnico plegable (los 27 parámetros para quien los quiera) */}
+              <div className="detalle-tecnico">
+                <button type="button" className="detalle-toggle" onClick={() => setDetalleTecnicoAbierto((v) => !v)}>
+                  <span className={`detalle-caret ${detalleTecnicoAbierto ? 'open' : ''}`}>›</span>
+                  {detalleTecnicoAbierto ? 'Ocultar detalle técnico' : 'Ver detalle técnico (27 parámetros)'}
+                </button>
+
+                {detalleTecnicoAbierto && (
+                <>
                 <div className="tabs-header">
                   <button type="button" className={`tab-btn ${tabActivo === 'resumen' ? 'active' : ''}`} onClick={() => setTabActivo('resumen')}>📊 Resumen & Textura</button>
                   <button type="button" className={`tab-btn ${tabActivo === 'quimica' ? 'active' : ''}`} onClick={() => setTabActivo('quimica')}>🧪 Química & Acidez</button>
                   <button type="button" className={`tab-btn ${tabActivo === 'nutrientes' ? 'active' : ''}`} onClick={() => setTabActivo('nutrientes')}>🌱 Macro & Micro</button>
                   <button type="button" className={`tab-btn ${tabActivo === 'complejo' ? 'active' : ''}`} onClick={() => setTabActivo('complejo')}>🔋 Complejo & Saturación</button>
                 </div>
-              </div>
 
               <div className="tab-content">
                 {/* 1. RESUMEN Y TEXTURA */}
@@ -578,6 +658,9 @@ function App() {
                   </div>
                 )}
               </div>
+                </>
+                )}
+              </div>
             </div>
           ) : (
             <div className="empty-results card glass">
@@ -615,6 +698,28 @@ function App() {
             )}
           </div>
 
+          {/* Contexto para el prior de amenazas: cultivo + clima/temporada */}
+          <div className="form-group contexto-amenazas">
+            <label>Contexto del cultivo (afina la detección y evita alucinaciones)</label>
+            <div className="contexto-grid">
+              <div className="contexto-campo">
+                <span className="contexto-label">🌱 Cultivo</span>
+                <select value={cultivoHoja} onChange={(e) => setCultivoHoja(e.target.value)}>
+                  {CULTIVOS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </div>
+              <div className="contexto-campo">
+                <span className="contexto-label">🌡️ Clima / temporada</span>
+                <select value={climaHoja} onChange={(e) => setClimaHoja(e.target.value)}>
+                  {CLIMAS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <small className="contexto-hint">
+              El sistema calcula las plagas/hongos probables para este cultivo, clima y suelo, y se los da a Gemini como pista.
+            </small>
+          </div>
+
           <div className="form-group">
             <label>Foto de la Hoja / Planta (Imagen)</label>
             <div
@@ -628,7 +733,7 @@ function App() {
                 <div className="preview-container">
                   <img src={imagenHojaPreview} alt="Hoja cargada" className="image-preview" />
                   <div className="preview-overlay glass">
-                    <label htmlFor="file-upload-hoja-replace" className="btn btn-sm btn-overlay">Cambiar Imagen</label>
+                    <label htmlFor="file-upload-hoja" className="btn btn-sm btn-overlay">Cambiar Imagen</label>
                   </div>
                 </div>
               ) : (
@@ -639,7 +744,6 @@ function App() {
                 </div>
               )}
               <input id="file-upload-hoja" type="file" className="hidden-file-input" accept="image/*" onChange={handleFileChangeHoja} />
-              <input id="file-upload-hoja-replace" type="file" className="hidden-file-input" accept="image/*" onChange={handleFileChangeHoja} />
             </div>
           </div>
 
