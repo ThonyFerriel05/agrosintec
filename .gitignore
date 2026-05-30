@@ -1,3 +1,31 @@
+# Logs e historial
+*.log
+npm-debug.log*
+
+# Dependencias
 node_modules/
+jspm_packages/
+
+# Builds y salidas
+dist/
+dist-ssr/
+out/
+
+# Base de datos local y entorno
+agrosintec/db.json
+agrosintec/.env
 .env
-db.json
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Configuración de editores
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
