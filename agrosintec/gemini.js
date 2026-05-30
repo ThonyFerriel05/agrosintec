@@ -151,7 +151,8 @@ export function identificarFactoresLimitantes(perfilSuelo) {
 }
 
 // Fallback valido de hoja, para que el demo no se rompa si Gemini falla.
-function fallbackHoja(factoresLimitantes) {
+// Recibe el contexto (prior de amenazas) para devolverlo igual que en el exito.
+function fallbackHoja(factoresLimitantes, contexto) {
   return {
     signos_detectados: [],
     diagnostico_probable: "No se pudo analizar la hoja con Gemini en este momento.",
@@ -161,6 +162,7 @@ function fallbackHoja(factoresLimitantes) {
     razonamiento_suelo: factoresLimitantes.length
       ? `No hubo analisis de imagen. Factores limitantes del suelo: ${factoresLimitantes.join(" | ")}.`
       : "No hubo analisis de imagen y el suelo no mostro factores limitantes claros.",
+    contexto,
     _error: "Fallo la llamada a Gemini, se devolvio estructura de fallback valida.",
   };
 }
@@ -201,9 +203,20 @@ export async function analizarHoja(imagenBase64, mimeType, perfilSuelo, cultivo 
     });
 
     const datos = JSON.parse(respuesta.text);
+    // Adjuntamos el PRIOR (amenazas que consideramos) para mostrarlo en la UI:
+    // es nuestro diferenciador, debe ser visible. No lo decide Gemini, es del codigo.
+    datos.contexto = {
+      cultivo: contexto.cultivo,
+      clima: contexto.climaLabel,
+      amenazas: contexto.amenazas,
+    };
     return datos;
   } catch (error) {
     console.error("[gemini] Error al analizar hoja:", error?.message || error);
-    return fallbackHoja(factoresLimitantes);
+    return fallbackHoja(factoresLimitantes, {
+      cultivo: contexto.cultivo,
+      clima: contexto.climaLabel,
+      amenazas: contexto.amenazas,
+    });
   }
 }

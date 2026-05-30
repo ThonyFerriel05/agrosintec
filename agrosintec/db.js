@@ -57,3 +57,34 @@ export async function leerSuelo(agricultor_id) {
   if (!agricultor || !agricultor.suelo) return null;
   return agricultor.suelo;
 }
+
+/**
+ * Guarda un diagnostico de hoja en el historial del agricultor (mas reciente primero).
+ * @param {string} agricultor_id
+ * @param {object} diagnostico - resultado de la Fase 2 (se le agrega `fecha`).
+ * @returns {Promise<object>} el diagnostico guardado (con fecha).
+ */
+export async function guardarDiagnostico(agricultor_id, diagnostico) {
+  const db = await leerDB();
+  if (!db.agricultores[agricultor_id]) db.agricultores[agricultor_id] = {};
+  if (!Array.isArray(db.agricultores[agricultor_id].diagnosticos)) {
+    db.agricultores[agricultor_id].diagnosticos = [];
+  }
+  const registro = { ...diagnostico, fecha: new Date().toISOString() };
+  db.agricultores[agricultor_id].diagnosticos.unshift(registro);
+  // Tope para no inflar el json (demo): solo los ultimos 20.
+  db.agricultores[agricultor_id].diagnosticos =
+    db.agricultores[agricultor_id].diagnosticos.slice(0, 20);
+  await escribirDB(db);
+  return registro;
+}
+
+/**
+ * Lee el historial de diagnosticos de hoja de un agricultor (mas reciente primero).
+ * @param {string} agricultor_id
+ * @returns {Promise<object[]>}
+ */
+export async function leerDiagnosticos(agricultor_id) {
+  const db = await leerDB();
+  return db.agricultores[agricultor_id]?.diagnosticos || [];
+}

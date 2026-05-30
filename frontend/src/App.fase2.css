@@ -103,6 +103,58 @@
   .contexto-grid { grid-template-columns: 1fr; }
 }
 
+/* ======== PANEL DEL PRIOR (amenazas probables, en vivo) ======== */
+.prior-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.prior-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+.prior-head h4 { margin: 0; font-size: 0.98rem; color: #6ee7b7; }
+.prior-tag {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(110, 231, 183, 0.18);
+  color: #a7f3d0;
+}
+.prior-sub { margin: 0.4rem 0 0.8rem; font-size: 0.8rem; opacity: 0.75; line-height: 1.4; }
+.prior-list { display: flex; flex-direction: column; gap: 0.7rem; }
+.prior-item {
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.prior-item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.prior-nombre { font-weight: 600; font-size: 0.9rem; }
+.prior-pct { font-weight: 700; font-variant-numeric: tabular-nums; color: #6ee7b7; }
+.prior-bar-track {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  margin: 0.4rem 0;
+}
+.prior-bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #34d399, #10b981); transition: width 0.5s ease; }
+.prior-razon { margin: 0; font-size: 0.76rem; opacity: 0.7; line-height: 1.4; }
+
+/* ======== HISTORIAL DE DIAGNÓSTICOS ======== */
+.historial-card { margin-top: 1.1rem; padding: 1.2rem; }
+.historial-list { display: flex; flex-direction: column; gap: 0.7rem; margin-top: 0.5rem; }
+.historial-item {
+  padding: 0.8rem 0.9rem;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.historial-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
+.historial-fecha { font-size: 0.76rem; opacity: 0.6; }
+.historial-diag { margin: 0 0 0.35rem; line-height: 1.45; font-size: 0.9rem; }
+.historial-meta { font-size: 0.76rem; opacity: 0.7; }
+
 /* ===================== DIAGNOSTICO DE HOJA ===================== */
 .diag-headline {
   display: flex;

@@ -6,7 +6,8 @@ import express from "express";
 import cors from "cors";
 
 import { extraerAnalisisSuelo, analizarHoja } from "./gemini.js";
-import { guardarSuelo, leerSuelo } from "./db.js";
+import { guardarSuelo, leerSuelo, guardarDiagnostico, leerDiagnosticos } from "./db.js";
+import { calcularAmenazas } from "./riesgoFitosanitario.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -106,7 +107,33 @@ app.post("/analizar-hoja", async (req, res) => {
   //    resuelve con estructura valida.
   const resultado = await analizarHoja(base64, mimeType, perfilSuelo, cultivo, clima);
 
+  // 3) Se guarda en el historial del agricultor (con cultivo/clima del contexto).
+  await guardarDiagnostico(agricultor_id, { ...resultado, cultivo, clima });
+
   return res.json(resultado);
+});
+
+// POST /amenazas-probables  { agricultor_id, cultivo, clima }
+// Devuelve el PRIOR (amenazas probables) SIN llamar a Gemini: pura logica
+// determinista. Sirve para mostrar en vivo lo que el sistema "espera" antes
+// de subir la foto de la hoja.
+app.post("/amenazas-probables", async (req, res) => {
+  const { agricultor_id, cultivo, clima } = req.body || {};
+  if (!agricultor_id) {
+    return res.status(400).json({ error: "Falta agricultor_id." });
+  }
+  const perfilSuelo = await leerSuelo(agricultor_id);
+  if (!perfilSuelo) {
+    return res.status(409).json({ error: `No hay analisis de suelo para "${agricultor_id}".` });
+  }
+  return res.json(calcularAmenazas(perfilSuelo, cultivo, clima));
+});
+
+// GET /diagnosticos/:agricultor_id  -> historial de diagnosticos de hoja
+app.get("/diagnosticos/:agricultor_id", async (req, res) => {
+  const { agricultor_id } = req.params;
+  const diagnosticos = await leerDiagnosticos(agricultor_id);
+  return res.json(diagnosticos);
 });
 
 // GET /suelo/:agricultor_id  -> leer lo guardado

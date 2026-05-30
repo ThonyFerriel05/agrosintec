@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import './App.fase2.css';
 
@@ -102,9 +102,45 @@ function App() {
   const [dragActiveHoja, setDragActiveHoja] = useState(false);
   const [cultivoHoja, setCultivoHoja] = useState('general'); // contexto para el prior de amenazas
   const [climaHoja, setClimaHoja] = useState('templado');
+  const [amenazasPrior, setAmenazasPrior] = useState(null);  // prior mostrado EN VIVO (antes de la foto)
+  const [historialHoja, setHistorialHoja] = useState([]);    // historial de diagnosticos guardados
 
   // El Paso 2 SOLO se habilita cuando hay un perfil de suelo cargado para el agricultor.
   const perfilSueloListo = !!(resultado && resultado.parametros);
+
+  // PRIOR en vivo: al entrar al paso de hoja (o cambiar cultivo/clima/agricultor),
+  // recalcula las amenazas probables (puro calculo del backend, sin Gemini).
+  // setState solo tras el await (asincrono) + cancelacion para evitar updates stale.
+  useEffect(() => {
+    if (pasoActivo !== 'hoja' || !perfilSueloListo || !agricultorId.trim()) return;
+    let cancelado = false;
+    (async () => {
+      try {
+        const response = await fetch(`${API_URL}/amenazas-probables`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agricultor_id: agricultorId.trim(), cultivo: cultivoHoja, clima: climaHoja })
+        });
+        const datos = response.ok ? await response.json() : null;
+        if (!cancelado) setAmenazasPrior(datos);
+      } catch { if (!cancelado) setAmenazasPrior(null); }
+    })();
+    return () => { cancelado = true; };
+  }, [pasoActivo, perfilSueloListo, cultivoHoja, climaHoja, agricultorId]);
+
+  // Historial: recarga al entrar al paso de hoja y cada vez que llega un diagnostico nuevo.
+  useEffect(() => {
+    if (pasoActivo !== 'hoja' || !perfilSueloListo || !agricultorId.trim()) return;
+    let cancelado = false;
+    (async () => {
+      try {
+        const response = await fetch(`${API_URL}/diagnosticos/${encodeURIComponent(agricultorId.trim())}`);
+        const datos = response.ok ? await response.json() : [];
+        if (!cancelado) setHistorialHoja(datos);
+      } catch { if (!cancelado) setHistorialHoja([]); }
+    })();
+    return () => { cancelado = true; };
+  }, [pasoActivo, perfilSueloListo, agricultorId, diagnostico]);
 
   // =================== PASO 1: SUELO ===================
   const procesarArchivo = (file) => {
@@ -720,6 +756,29 @@ function App() {
             </small>
           </div>
 
+          {/* PRIOR EN VIVO: lo que el sistema espera ANTES de ver la hoja (anti-alucinación). */}
+          {amenazasPrior && Array.isArray(amenazasPrior.amenazas) && amenazasPrior.amenazas.length > 0 && (
+            <div className="prior-panel">
+              <div className="prior-head">
+                <h4>🛡️ Amenazas probables</h4>
+                <span className="prior-tag">calculado antes de la foto</span>
+              </div>
+              <p className="prior-sub">Derivado del suelo + cultivo + clima ({amenazasPrior.climaLabel}). Esto ancla a Gemini para que NO invente enfermedades.</p>
+              <div className="prior-list">
+                {amenazasPrior.amenazas.map((a) => (
+                  <div key={a.id} className="prior-item">
+                    <div className="prior-item-head">
+                      <span className="prior-nombre">{a.emoji} {a.nombre}</span>
+                      <span className="prior-pct">{Math.round(a.probabilidad * 100)}%</span>
+                    </div>
+                    <div className="prior-bar-track"><div className="prior-bar" style={{ width: `${Math.round(a.probabilidad * 100)}%` }}></div></div>
+                    <p className="prior-razon">{a.tipo} · {a.razones.join('; ')}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="form-group">
             <label>Foto de la Hoja / Planta (Imagen)</label>
             <div
@@ -824,6 +883,30 @@ function App() {
                 <div className="feat-item hover-glow"><span className="feat-icon">🧠</span><strong>Cruce Suelo-Hoja</strong><p>El suelo guardado refuerza o descarta hipótesis visuales.</p></div>
                 <div className="feat-item hover-glow"><span className="feat-icon">📊</span><strong>Riesgo + Confianza</strong><p>Detección temprana en lenguaje de probabilidad, no certezas.</p></div>
                 <div className="feat-item hover-glow"><span className="feat-icon">🎯</span><strong>Acción Concreta</strong><p>Recomendación accionable según el diagnóstico.</p></div>
+              </div>
+            </div>
+          )}
+
+          {/* HISTORIAL de diagnósticos guardados de este agricultor */}
+          {historialHoja.length > 0 && (
+            <div className="card glass historial-card animate-fade-in">
+              <div className="card-header border-glow">
+                <h3>🗂️ Historial de diagnósticos ({historialHoja.length})</h3>
+                <p className="card-subtitle">Detecciones previas guardadas para {agricultorId.trim()}</p>
+              </div>
+              <div className="historial-list">
+                {historialHoja.map((h, i) => (
+                  <div key={i} className="historial-item hover-glow">
+                    <div className="historial-top">
+                      <span className={`badge ${claseRiesgo(h.nivel_riesgo)}`}>Riesgo: {h.nivel_riesgo || 's/d'}</span>
+                      <span className="historial-fecha">{h.fecha ? new Date(h.fecha).toLocaleString() : ''}</span>
+                    </div>
+                    <p className="historial-diag">{h.diagnostico_probable || 'sin dato'}</p>
+                    <span className="historial-meta">
+                      {h.cultivo ? `🌱 ${h.cultivo}` : ''}{h.clima ? ` · 🌡️ ${h.clima}` : ''} · 🎯 confianza {Math.round((Number(h.confianza) || 0) * 100)}%
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
