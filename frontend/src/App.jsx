@@ -272,7 +272,7 @@ function App() {
         <div className="logo-section">
           <div className="logo-icon animate-pulse">🌿</div>
           <div className="logo-text">
-            <h1>AgroSintec</h1>
+            <h1><span className="agro-text">Agro</span><span className="sintec-text">Sintec</span></h1>
             <p>Asistencia agronómica con IA · Suelo + Detección en hoja (Gemini Vision)</p>
           </div>
         </div>
