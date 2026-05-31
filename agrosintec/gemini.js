@@ -220,3 +220,235 @@ export async function analizarHoja(imagenBase64, mimeType, perfilSuelo, cultivo 
     });
   }
 }
+
+// =====================================================================
+// CHAT CONTEXTUALIZADO - Responde preguntas sobre el suelo del agricultor
+// =====================================================================
+
+/**
+ * Responde una pregunta sobre el contexto del suelo (chat normal).
+ * Mantiene el historial de conversación y limita las respuestas al tema agrícola.
+ * @param {string} mensajeUsuario - la pregunta del usuario
+ * @param {object} perfilSuelo - perfil de suelo del agricultor (contexto)
+ * @param {object[]} historialChat - array de mensajes previos { rol, contenido }
+ * @returns {Promise<string>} respuesta de Gemini
+ */
+export async function chatSobreContexto(mensajeUsuario, perfilSuelo, historialChat = []) {
+  try {
+    // Construir el contexto del suelo en texto legible
+    const textoContextoSuelo = construirTextoContextoSuelo(perfilSuelo);
+
+    // Sistema prompt que limita el alcance al suelo y agricultura
+    const systemPrompt = `Eres un asesor agrónomo experto y amable. Tu rol es responder preguntas sobre el análisis de suelo y la agricultura del agricultor.
+
+## CONTEXTO DEL SUELO DEL AGRICULTOR:
+${textoContextoSuelo}
+
+## REGLAS IMPORTANTES:
+1. Solo responde preguntas relacionadas con el suelo, la agricultura, cultivos y manejo agronómico.
+2. Si la pregunta NO está relacionada con estos temas, responde amablemente: "Disculpa, esa pregunta está fuera de mi área de asesoría. Soy especialista en análisis de suelo y agricultura. ¿Tienes preguntas sobre el suelo o los cultivos?"
+3. Usa el contexto del suelo para dar recomendaciones específicas y personalizadas.
+4. Sé conciso pero informativo. Máximo 3-4 párrafos por respuesta.
+5. Si necesitas clarificar algo del suelo que no esté en los datos, pídelo de forma educada.`;
+
+    // Construir el historial en formato de Gemini
+    const contenidoChat = [];
+
+    // Agregar el sistema prompt
+    contenidoChat.push({
+      role: "user",
+      parts: [{ text: systemPrompt }],
+    });
+    contenidoChat.push({
+      role: "model",
+      parts: [{ text: "Entendido. Soy un asesor agrónomo especializado en análisis de suelo. Estoy listo para responder tus preguntas sobre el suelo y la agricultura. ¿Qué deseas saber?" }],
+    });
+
+    // Agregar historial previo de la conversación
+    if (Array.isArray(historialChat) && historialChat.length > 0) {
+      for (const msg of historialChat) {
+        contenidoChat.push({
+          role: msg.rol === "user" ? "user" : "model",
+          parts: [{ text: msg.contenido }],
+        });
+      }
+    }
+
+    // Agregar el mensaje actual del usuario
+    contenidoChat.push({
+      role: "user",
+      parts: [{ text: mensajeUsuario }],
+    });
+
+    // Llamar a Gemini
+    const respuesta = await ai.models.generateContent({
+      model: MODELO,
+      contents: contenidoChat,
+      config: {
+        temperature: 0.7, // Un poco más creativo que extraction, pero coherente
+      },
+    });
+
+    const respuestaTexto = respuesta.text || "No pude generar una respuesta.";
+    return respuestaTexto;
+  } catch (error) {
+    console.error("[gemini-chat] Error al responder pregunta:", error?.message || error);
+    
+    // Detectar si es error de cuota (429)
+    const esErrorCuota = error?.message?.includes("429") || error?.message?.includes("Quota exceeded") || error?.message?.includes("quota");
+    
+    if (esErrorCuota) {
+      console.warn("[gemini-chat] Cuota de Gemini agotada (429). Usando respuesta con inteligencia local...");
+      return generarFallbackChat(mensajeUsuario, perfilSuelo);
+    }
+    
+    return `Lo siento, ocurrió un error al procesar tu pregunta. Por favor intenta de nuevo. Error: ${error?.message || "desconocido"}`;
+  }
+}
+
+/**
+ * Genera una respuesta inteligente basada en el contexto del suelo cuando Gemini no está disponible.
+ * Usa reglas agrícolas y los factores limitantes del suelo.
+ * @param {string} mensajeUsuario - la pregunta del usuario
+ * @param {object} perfilSuelo - perfil de suelo
+ * @returns {string} respuesta generada localmente
+ */
+function generarFallbackChat(mensajeUsuario, perfilSuelo) {
+  const pregunta = mensajeUsuario.toLowerCase();
+  const factores = identificarFactoresLimitantes(perfilSuelo);
+  
+  // Preguntas fuera del tema
+  if (pregunta.match(/hola|como estás|que tal|covid|política|deportes|música|películas/i)) {
+    return "Disculpa, esa pregunta está fuera de mi área de asesoría. Soy especialista en análisis de suelo y agricultura. ¿Tienes preguntas sobre el suelo o los cultivos?";
+  }
+  
+  // Preguntas sobre factores limitantes
+  if (pregunta.match(/factor|limitante|problema|limitaciones/)) {
+    if (factores.length === 0) {
+      return "Según el análisis del suelo, no se detectaron factores limitantes significativos. Tu suelo presenta buenas características generales para la mayoría de cultivos. ¿Hay algún cultivo específico que quieras cultivar?";
+    }
+    return `Se identificaron los siguientes factores limitantes en tu suelo:\n\n${factores.map(f => `• ${f}`).join("\n")}\n\nEstos factores pueden afectar el crecimiento de tus plantas. ¿Quieres recomendaciones para manejarlos?`;
+  }
+  
+  // Preguntas sobre pH
+  if (pregunta.match(/ph|acido|alcalino|acidez/)) {
+    const ph = perfilSuelo?.parametros?.ph;
+    if (!ph) return "No tengo datos de pH registrados en tu perfil de suelo.";
+    const valor = parseFloat(String(ph.valor).replace(",", "."));
+    const clasif = String(ph.clasificacion).toLowerCase();
+    if (valor < 5.5 || clasif.includes("muy acido")) {
+      return `Tu suelo tiene pH ${ph.valor} (${ph.clasificacion}), que es muy ácido. Esto puede afectar la disponibilidad de nutrientes. Te recomiendo aplicar cal agrícola para aumentar el pH. ¿Necesitas más detalles sobre enmiendas?`;
+    }
+    if (valor > 8 || clasif.includes("alcalino")) {
+      return `Tu suelo tiene pH ${ph.valor} (${ph.clasificacion}), que es alcalino. Esto puede bloquear algunos micronutrientes. Considera aplicar azufre elemental. ¿Qué cultivos planeas?`;
+    }
+    return `Tu suelo tiene pH ${ph.valor} (${ph.clasificacion}), que es adecuado para la mayoría de cultivos. ¿Hay algo específico que quieras saber?`;
+  }
+  
+  // Preguntas sobre nutrientes
+  if (pregunta.match(/nutriente|nitrogeno|fosforo|potasio|fertiliz|abono/)) {
+    const parametrosNutritivos = perfilSuelo?.parametros || {};
+    const respuestas = [];
+    
+    if (parametrosNutritivos.nitrogeno?.clasificacion?.toLowerCase().includes("bajo")) {
+      respuestas.push("El nitrógeno está bajo. Considera aplicar fertilizantes nitrogenados o incorporar materia orgánica.");
+    }
+    if (parametrosNutritivos.fosforo?.clasificacion?.toLowerCase().includes("bajo")) {
+      respuestas.push("El fósforo está bajo, lo que afecta el crecimiento radicular. Aplicar fertilizantes fosfatados es recomendado.");
+    }
+    if (parametrosNutritivos.potasio?.clasificacion?.toLowerCase().includes("bajo")) {
+      respuestas.push("El potasio está bajo, necesario para la resistencia de la planta. Un fertilizante potásico sería beneficioso.");
+    }
+    
+    if (respuestas.length > 0) {
+      return `Basándome en tu análisis de suelo:\n\n${respuestas.map(r => `• ${r}`).join("\n")}\n\n¿Necesitas información sobre dosis específicas?`;
+    }
+    return "Los niveles de nutrientes en tu suelo parecen adecuados. ¿Qué cultivo específico vas a sembrar?";
+  }
+  
+  // Preguntas sobre materia orgánica
+  if (pregunta.match(/organica|materia|compost|abono verde|humus/)) {
+    const mo = perfilSuelo?.parametros?.materia_organica;
+    if (mo) {
+      const valor = parseFloat(String(mo.valor).replace(",", "."));
+      if (valor < 2) {
+        return `Tu suelo tiene ${mo.valor}% de materia orgánica (${mo.clasificacion}). Este nivel es bajo. Te recomiendo incorporar compost, estiércol bien descompuesto o hacer abonos verdes para mejorar la estructura y fertilidad del suelo.`;
+      }
+      if (valor > 8) {
+        return `Tu suelo tiene ${mo.valor}% de materia orgánica (${mo.clasificacion}). Este nivel es excelente, indica un suelo muy fértil y con buena estructura. Mantén esta práctica de añadir materia orgánica regularmente.`;
+      }
+      return `Tu suelo tiene ${mo.valor}% de materia orgánica (${mo.clasificacion}), que es un buen nivel. Puedes mejorar incorporando restos de cosechas y compost regularmente.`;
+    }
+    return "No tengo datos de materia orgánica en tu perfil. Incorporar abono orgánico es siempre beneficioso.";
+  }
+  
+  // Preguntas sobre textura
+  if (pregunta.match(/textura|arena|limo|arcilla|estructura|compactación/)) {
+    if (perfilSuelo?.textura) {
+      const tex = perfilSuelo.textura;
+      return `Tu suelo es ${tex.clase_textural || "sin clasificación"} con ${tex.arena_pct}% arena, ${tex.limo_pct}% limo y ${tex.arcilla_pct}% arcilla. Esta composición afecta la retención de agua y aireación. ¿Necesitas recomendaciones para mejorar la estructura?`;
+    }
+    return "No tengo datos de textura en tu perfil.";
+  }
+  
+  // Pregunta genérica sobre suelo
+  if (pregunta.match(/suelo|tierra|terreno/)) {
+    const resumen = perfilSuelo?.interpretacion?.resumen || "Suelo sin clasificar";
+    return `Tu suelo es ${resumen}. Para dar recomendaciones más específicas, pregunta sobre nutrientes, pH, factores limitantes o qué cultivos quieres sembrar.`;
+  }
+  
+  // Respuesta por defecto cuando Gemini no está disponible
+  return "En este momento estoy con disponibilidad limitada de procesamiento. Soy especialista en suelo y agricultura. Prueba preguntar sobre:\n• Factores limitantes\n• pH del suelo\n• Nutrientes y fertilización\n• Textura y estructura\n• Materia orgánica\n\nO cuéntame qué cultivo quieres sembrar para darte recomendaciones específicas.";
+}
+
+/**
+ * Construye un texto legible con el contexto del suelo para inyectar en el prompt.
+ * @param {object} perfilSuelo - perfil de suelo
+ * @returns {string} texto formateado
+ */
+function construirTextoContextoSuelo(perfilSuelo) {
+  if (!perfilSuelo) {
+    return "No hay datos de suelo disponibles.";
+  }
+
+  const p = perfilSuelo.parametros || {};
+  let texto = "";
+
+  // Resumen de interpretación
+  if (perfilSuelo.interpretacion) {
+    const interp = perfilSuelo.interpretacion;
+    texto += `**Tipo de Suelo:** ${interp.tipo_suelo || "sin clasificar"}\n`;
+    texto += `**Resumen:** ${interp.resumen || "sin resumen"}\n\n`;
+  }
+
+  // Textura
+  if (perfilSuelo.textura) {
+    const tex = perfilSuelo.textura;
+    texto += `**Textura del Suelo:**\n`;
+    texto += `- Arena: ${tex.arena_pct || "sin dato"}%\n`;
+    texto += `- Limo: ${tex.limo_pct || "sin dato"}%\n`;
+    texto += `- Arcilla: ${tex.arcilla_pct || "sin dato"}%\n`;
+    texto += `- Clasificación textural: ${tex.clase_textural || "sin dato"}\n\n`;
+  }
+
+  // Parámetros químicos principales
+  texto += `**Parámetros Principales:**\n`;
+  const parametrosPrincipales = ["ph", "materia_organica", "conductividad_electrica", "nitrogeno", "fosforo", "potasio"];
+  for (const clave of parametrosPrincipales) {
+    const param = p[clave];
+    if (param) {
+      texto += `- ${clave.toUpperCase()}: ${param.valor} ${param.unidad || ""} (${param.clasificacion || "sin clasificación"})\n`;
+    }
+  }
+
+  // Factores limitantes si los hay
+  const factores = identificarFactoresLimitantes(perfilSuelo);
+  if (factores.length > 0) {
+    texto += `\n**Factores Limitantes Identificados:**\n`;
+    for (const factor of factores) {
+      texto += `- ${factor}\n`;
+    }
+  }
+
+  return texto;
+}

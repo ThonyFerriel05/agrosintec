@@ -88,3 +88,50 @@ export async function leerDiagnosticos(agricultor_id) {
   const db = await leerDB();
   return db.agricultores[agricultor_id]?.diagnosticos || [];
 }
+  /**
+   * Guarda un mensaje de chat en el historial del agricultor.
+   * @param {string} agricultor_id
+   * @param {string} rol - "user" o "assistant"
+   * @param {string} contenido - el mensaje
+   * @returns {Promise<object>} el mensaje guardado con timestamp
+   */
+  export async function guardarMensajeChat(agricultor_id, rol, contenido) {
+    const db = await leerDB();
+    if (!db.agricultores[agricultor_id]) db.agricultores[agricultor_id] = {};
+    if (!Array.isArray(db.agricultores[agricultor_id].chat)) {
+      db.agricultores[agricultor_id].chat = [];
+    }
+    const mensaje = {
+      rol,
+      contenido,
+      timestamp: new Date().toISOString(),
+    };
+    db.agricultores[agricultor_id].chat.push(mensaje);
+    // Limitar a los últimos 50 mensajes para no inflar el JSON
+    db.agricultores[agricultor_id].chat = db.agricultores[agricultor_id].chat.slice(-50);
+    await escribirDB(db);
+    return mensaje;
+  }
+
+  /**
+   * Lee el historial de chat de un agricultor.
+   * @param {string} agricultor_id
+   * @returns {Promise<object[]>} array de mensajes { rol, contenido, timestamp }
+   */
+  export async function leerHistorialChat(agricultor_id) {
+    const db = await leerDB();
+    return db.agricultores[agricultor_id]?.chat || [];
+  }
+
+  /**
+   * Limpia el historial de chat de un agricultor.
+   * @param {string} agricultor_id
+   * @returns {Promise<void>}
+   */
+  export async function limpiarHistorialChat(agricultor_id) {
+    const db = await leerDB();
+    if (db.agricultores[agricultor_id]) {
+      db.agricultores[agricultor_id].chat = [];
+    }
+    await escribirDB(db);
+  }

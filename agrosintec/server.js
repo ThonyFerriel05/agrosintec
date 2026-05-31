@@ -5,8 +5,16 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
-import { extraerAnalisisSuelo, analizarHoja } from "./gemini.js";
-import { guardarSuelo, leerSuelo, guardarDiagnostico, leerDiagnosticos } from "./db.js";
+import { extraerAnalisisSuelo, analizarHoja, chatSobreContexto } from "./gemini.js";
+import {
+  guardarSuelo,
+  leerSuelo,
+  guardarDiagnostico,
+  leerDiagnosticos,
+  guardarMensajeChat,
+  leerHistorialChat,
+  limpiarHistorialChat,
+} from "./db.js";
 import { calcularAmenazas } from "./riesgoFitosanitario.js";
 
 const app = express();
@@ -39,9 +47,9 @@ app.use(
 // Las imagenes en base64 son grandes -> subimos el limite del body.
 app.use(express.json({ limit: "20mb" }));
 
-// Aviso si falta la API key (no rompe el arranque, pero el demo fallara al extraer).
+// Aviso si faltan las API keys
 if (!process.env.GEMINI_API_KEY) {
-  console.warn("[server] AVISO: falta GEMINI_API_KEY en .env. La extraccion devolvera fallback.");
+  console.warn("[server] AVISO: falta GEMINI_API_KEY en .env. La extraccion y chat devolvera fallback.");
 }
 
 /**
@@ -147,6 +155,147 @@ app.get("/suelo/:agricultor_id", async (req, res) => {
   return res.json(suelo);
 });
 
+// =====================================================================
+// ENDPOINTS DE CHAT CONTEXTUALIZADO
+// =====================================================================
+
+// POST /chat  { agricultor_id, mensaje }
+// Responde una pregunta sobre el contexto del suelo del agricultor
+app.post("/chat", async (req, res) => {
+  const { agricultor_id, mensaje } = req.body || {};
+
+  if (!agricultor_id) {
+    return res.status(400).json({ error: "Falta agricultor_id." });
+  }
+  if (!mensaje || typeof mensaje !== "string") {
+    return res.status(400).json({ error: "Falta mensaje (debe ser un string)." });
+  }
+
+  try {
+    // 1) Leer el suelo del agricultor (contexto)
+    const perfilSuelo = await leerSuelo(agricultor_id);
+    if (!perfilSuelo) {
+      return res.status(409).json({
+        error: `No hay análisis de suelo para "${agricultor_id}". Por favor, analiza el suelo primero.`,
+      });
+    }
+
+    // 2) Leer el historial de chat anterior
+    const historial = await leerHistorialChat(agricultor_id);
+
+    // 3) Llamar a Gemini con el contexto (con fallback inteligente si falla)
+    const respuesta = await chatSobreContexto(mensaje, perfilSuelo, historial);
+
+    // 4) Guardar el mensaje del usuario y la respuesta en el historial
+    await guardarMensajeChat(agricultor_id, "user", mensaje);
+    await guardarMensajeChat(agricultor_id, "assistant", respuesta);
+
+    // 5) Devolver la respuesta
+    return res.json({
+      agricultor_id,
+      mensaje_usuario: mensaje,
+      respuesta,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[chat] Error:", error?.message || error);
+    return res.status(500).json({
+      error: "Error al procesar el chat.",
+      detalle: error?.message || "desconocido",
+    });
+  }
+});
+
+// GET /chat/:agricultor_id  -> leer historial de chat
+app.get("/chat/:agricultor_id", async (req, res) => {
+  const { agricultor_id } = req.params;
+  try {
+    const historial = await leerHistorialChat(agricultor_id);
+    return res.json({
+      agricultor_id,
+      historial,
+    });
+  } catch (error) {
+    console.error("[chat-historial] Error:", error?.message || error);
+    return res.status(500).json({
+      error: "Error al leer el historial.",
+      detalle: error?.message || "desconocido",
+    });
+  }
+});
+
+// DELETE /chat/:agricultor_id  -> limpiar historial de chat
+app.delete("/chat/:agricultor_id", async (req, res) => {
+  const { agricultor_id } = req.params;
+  try {
+    await limpiarHistorialChat(agricultor_id);
+    return res.json({
+      message: `Historial de chat del agricultor "${agricultor_id}" eliminado.`,
+    });
+  } catch (error) {
+    console.error("[chat-limpiar] Error:", error?.message || error);
+    return res.status(500).json({
+      error: "Error al limpiar el historial.",
+      detalle: error?.message || "desconocido",
+    });
+  }
+});
+
+// =====================================================================
+// HEALTH CHECK - Verificar conexión a Groq
+// =====================================================================
+
+app.get("/health/groq", async (req, res) => {
+  try {
+    if (!process.env.GROQ_API_KEY) {
+      return res.status(503).json({
+        status: "error",
+        message: "GROQ_API_KEY no configurada en .env",
+        detalle: "Asegúrate de tener la variable GROQ_API_KEY en tu archivo .env",
+      });
+    }
+
+    // Intentar hacer una llamada simple a Groq
+    const Groq = (await import("groq-sdk")).default;
+    const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+    const prueba = await client.chat.completions.create({
+      messages: [{ role: "user", content: "Hola" }],
+      model: "mixtral-8x7b-32768",
+      max_tokens: 10,
+    });
+
+    return res.json({
+      status: "ok",
+      message: "Conexión a Groq verificada exitosamente",
+      modelo: "mixtral-8x7b-32768",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[health-groq] Error:", error?.message || error);
+    return res.status(503).json({
+      status: "error",
+      message: "No se pudo conectar a Groq",
+      error: error?.message || error?.status || "desconocido",
+      troubleshoot: "1. Verifica tu GROQ_API_KEY en .env\n2. Intenta obtener una nueva key en https://console.groq.com/keys\n3. Reinicia el backend",
+    });
+  }
+});
+
+// GET /health - Health check general
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    backend: "AgroSintec Fase 1+2+Chat (Groq)",
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      groq_check: "/health/groq",
+      chat: "/chat (POST)",
+      chat_historial: "/chat/:agricultor_id (GET)",
+    },
+  });
+});
+
 app.listen(PORT, () => {
-  console.log(`[server] Backend Fase 1+2 escuchando en http://localhost:${PORT}`);
+  console.log(`[server] Backend Fase 1+2+Chat (Gemini con fallback) escuchando en http://localhost:${PORT}`);
 });

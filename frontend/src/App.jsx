@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 import './App.fase2.css';
+import { ChatBox } from './ChatBox';
 
 // URL del backend Express. Viene de frontend/.env (VITE_API_URL).
 // Fallback a localhost:3000 por si no esta definida.
@@ -913,6 +914,13 @@ function App() {
         </section>
       </main>
       )}
+
+      {/* Chat Box */}
+      <ChatBox 
+        agricultorId={agricultorId} 
+        sueleLoaded={perfilSueloListo}
+        onChatOpen={() => {}}
+      />
 
       <footer className="app-footer glass">
         <p>© 2026 AgroSintec · Asistencia agronómica con IA · Gemini Vision</p>
